@@ -1,0 +1,119 @@
+#For production servers you will need configure the next parameters:
+################################################################
+#SYSCTL on 262144
+#on /etc/sysctl.conf next line:
+vm.max_map_count=262144
+
+
+################################################################
+#when you enable the option bootstrap.memory_lock you will need configure on /etc/security/limits.conf adding the next lines
+#note: for this example i´m using the user elastic for running all the instances, if you are using another user like ubuntu just modify the username
+elastic soft memlock unlimited
+elastic hard memlock unlimited
+
+
+################################################################
+#on /etc/hosts add the ip and hostname for each node:
+192.168.0.3 server1
+192.168.0.4 server2
+192.168.0.5 server3
+
+
+################################################################
+#add an extra interface on VirtualBox:
+#first check the interface name, for ubuntu 18.04 you can use
+ip a
+#now edit the file /etc/netplan/50-cloud-init.yaml on each node:
+#node1
+    network:
+    ethernets:
+        enp0s3:
+            dhcp4: true
+        enp0s8:
+            addresses: [192.168.0.3/24]
+            dhcp4: false
+    version: 2
+#node2
+network:
+    ethernets:
+        enp0s3:
+            dhcp4: true
+        enp0s8:
+            addresses: [192.168.0.4/24]
+            dhcp4: false
+    version: 2
+#node3
+network:
+    ethernets:
+        enp0s3:
+            dhcp4: true
+        enp0s8:
+            addresses: [192.168.0.5/24]
+            dhcp4: false
+    version: 2
+
+
+#for apply the new configuration:
+sudo netplan apply
+
+################################################################
+# CONFIGURE ELASTICSEARCH
+
+#configure the elasticsearch.yml file for each node
+    #node1
+    cluster.name: testlab
+    node.name: node1
+    bootstrap.memory_lock: true
+    network.host: 192.168.0.3
+    discovery.seed_hosts: ["server1", "server2", "server3"]
+    cluster.initial_master_nodes: ["node1", "node2"]
+    gateway.recover_after_nodes: 2
+
+
+    #node2
+    cluster.name: testlab
+    node.name: node2
+    bootstrap.memory_lock: true
+    network.host: 192.168.0.4
+    discovery.seed_hosts: ["server1", "server2", "server3"]
+    cluster.initial_master_nodes: ["node1", "node2"]
+    gateway.recover_after_nodes: 2
+
+
+    #node3
+    cluster.name: testlab
+    node.name: node3
+    bootstrap.memory_lock: true
+    network.host: 192.168.0.5
+    discovery.seed_hosts: ["server1", "server2", "server3"]
+    cluster.initial_master_nodes: ["node1", "node2"]
+    gateway.recover_after_nodes: 2
+
+#for starting the elasticsearch instance you can use:
+nohup /home/elastic/elasticsearch-7.5.0/bin/elasticsearch > /dev/null & 
+
+################################################################
+#CONFIGURE KIBANA
+#on KIBANA_HOME/config/kibana.yml
+    server.host: "192.168.0.3"
+    elasticsearch.hosts: ["http://192.168.0.3:9200"]
+
+
+#run kibana
+nohup /home/elastic/kibana-7.5.0-linux-x86_64/bin/kibana > /dev/null &
+
+################################################################
+#CONFIGURE PORT FORWARDING INTO VIRTUALBOX:
+#RULES node1
+127.0.0.1:5601 -> 192.168.0.3:5601  #for kibana
+127.0.0.1:1022 -> 192.168.0.3:22    #for SSH
+127.0.0.1:9201 -> 192.168.0.3:9200  #for ES
+
+#RULES node2
+127.0.0.1:1023 -> 192.168.0.3:22    #for SSH
+127.0.0.1:9202 -> 192.168.0.3:9200  #for ES
+
+#RULES node3
+127.0.0.1:1024 -> 192.168.0.3:22    #for SSH
+127.0.0.1:9203 -> 192.168.0.3:9200  #for ES
+
